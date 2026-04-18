@@ -1,0 +1,55 @@
+# Release a new version
+
+Two steps.
+
+### 1. Build locally
+
+```
+./build-local.sh 8.4
+```
+
+Builds the image for PHP 8.4 on host arch, pulling whatever patch Alpine currently ships as `php84`. Prints the full PHP version. If the version shown is what you want to publish, continue.
+
+### 2. Release
+
+```
+./release.sh 8.4.12            # tag v8.4.12 and push — triggers CI
+./release.sh 8.4.12 --no-push  # tag but don't push
+```
+
+`release.sh` checks that `build-local.sh` was run against this exact version (via the `.build-verified-8.4` marker), then tags `v8.4.12` and pushes. The tag push triggers `.github/workflows/release.yml`, which:
+
+1. Builds multi-arch (amd64/arm64) with matching Alpine + PHP build args.
+2. Pushes to `ghcr.io/scalecommerce/docker-php-cli:8.4.12` (immutable) and `ghcr.io/scalecommerce/docker-php-cli:8.4` (rolling).
+3. Pulls the published image and verifies it actually contains PHP 8.4.12 — guards against Alpine bumping the patch between your local build and the CI run.
+4. Creates a GitHub Release whose body contains `/opt/versions.txt` and `/opt/extensions.txt`.
+
+### Preconditions for `release.sh`
+
+* Working tree clean, on `main`, no unpushed commits.
+* `./build-local.sh <major>` was run first.
+* The version you're releasing matches what the local build produced. If Alpine bumped the patch while you were preparing the release, the check fires — re-run `build-local.sh` and release the new version instead.
+
+## Alpine → PHP version mapping
+
+| PHP | Alpine |
+| --- | ------ |
+| 8.2 | 3.22   |
+| 8.3 | 3.23   |
+| 8.4 | 3.23   |
+| 8.5 | 3.23   |
+
+Kept in two places that must stay in sync: `build-local.sh` and `.github/workflows/release.yml`. If Alpine's PHP packaging moves, update both.
+
+## Manual multi-arch build (fallback)
+
+Only use this if CI is broken. You'll need a GitHub PAT with `write:packages`:
+
+```
+echo $GH_PAT | docker login ghcr.io -u <github-user> --password-stdin
+docker buildx create --name multiplatform-builder --use   # first time only
+docker buildx build --push --platform linux/amd64,linux/arm64 \
+  --build-arg ALPINE_VERSION=3.23 --build-arg PHP_VERSION=8.4 \
+  -t ghcr.io/scalecommerce/docker-php-cli:8.4.12 \
+  -t ghcr.io/scalecommerce/docker-php-cli:8.4 .
+```
