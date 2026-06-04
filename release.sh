@@ -90,7 +90,9 @@ fi
 # extension tweak) — the slot the bare PHP version lacks. The Dockerfile
 # content_hash is stamped into each tag's annotation, so a byte-identical
 # rebuild is refused instead of churning a pointless new revision.
-last_rev=$(git tag -l "v${VERSION}-r*" | sed -E "s/^v${VERSION}-r//" | grep -E '^[0-9]+$' | sort -n | tail -1)
+# `|| true`: grep exits 1 when there are no existing revisions yet, which would
+# otherwise trip `set -o pipefail` + `set -e` and kill the script silently.
+last_rev=$(git tag -l "v${VERSION}-r*" | sed -E "s/^v${VERSION}-r//" | grep -E '^[0-9]+$' | sort -n | tail -1 || true)
 if [[ -n "$last_rev" ]]; then
   prev_hash=$(git for-each-ref --format='%(contents)' "refs/tags/v${VERSION}-r${last_rev}" \
     | awk -F= '/^content_hash=/{print $2}')
