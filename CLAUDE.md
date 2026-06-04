@@ -23,7 +23,9 @@ Lives as a `case` statement in BOTH `build-local.sh` AND `.github/workflows/rele
 
 Two steps: `./build-local.sh <major>` then `./release.sh <full-version>`. `build-local.sh` writes `.build-verified-<major>` (image SHA + Dockerfile content hash + resolved full PHP version). `release.sh` refuses to tag unless the requested version exactly matches what the local build produced. This is deliberate: if Alpine bumped the PHP patch between the two steps, you must re-run `build-local.sh` and release the *new* version. CI re-verifies post-push against the tag for the same reason.
 
-Each release pushes `X.Y.Z` (immutable) + `X.Y` (rolling). **No `latest` tag — deliberate.** Don't add one without discussing it.
+Each release pushes three image tags: `X.Y.Z-rN` (immutable — PHP patch + our image revision), `X.Y.Z` (rolling → newest revision of that patch), and `X.Y` (rolling → newest patch). **No `latest` tag — deliberate.** Don't add one without discussing it.
+
+`-rN` is OUR slot for image changes that don't move the PHP patch (a zpinit bump, an extension tweak): the version axis is PHP-only, but image content is broader, so a bare `X.Y.Z` has nowhere to record "same PHP, new tooling." You still call `./release.sh X.Y.Z`; `release.sh` computes N by scanning existing `vX.Y.Z-r*` git tags and stamps the Dockerfile `content_hash` into each annotated tag, so a byte-identical rebuild is refused (no revision churn). Pre-revision `vX.Y.Z` tags (no suffix) are legacy; ignore them.
 
 ## zpinit is the entrypoint (PID 1)
 

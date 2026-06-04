@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Step 2 of 2: tag v<full-version> and push. Tag push triggers release.yml,
-# which builds multi-arch and publishes to ghcr.io.
+# Step 2 of 2: tag v<php>-r<rev> and push. Tag push triggers release.yml,
+# which builds multi-arch and publishes to ghcr.io. You pass the PHP version;
+# the image revision <rev> is computed here (see below).
 #
 # Must be run AFTER ./build-local.sh <major> succeeded with a matching
 # full version — the verification marker is checked below.
@@ -82,22 +83,50 @@ if [[ "$php_version" != "$VERSION" ]]; then
   exit 1
 fi
 
-if git rev-parse "v$VERSION" >/dev/null 2>&1; then
-  echo "tag v$VERSION already exists — nothing to release" >&2
+# -- compute the next image revision -----------------------------------------
+#
+# Tags are v<php>-r<N>. <php> is the PHP patch; <N> is OUR image revision,
+# bumped whenever image content changes while PHP stays put (zpinit bump,
+# extension tweak) — the slot the bare PHP version lacks. The Dockerfile
+# content_hash is stamped into each tag's annotation, so a byte-identical
+# rebuild is refused instead of churning a pointless new revision.
+last_rev=$(git tag -l "v${VERSION}-r*" | sed -E "s/^v${VERSION}-r//" | grep -E '^[0-9]+$' | sort -n | tail -1)
+if [[ -n "$last_rev" ]]; then
+  prev_hash=$(git for-each-ref --format='%(contents)' "refs/tags/v${VERSION}-r${last_rev}" \
+    | awk -F= '/^content_hash=/{print $2}')
+  if [[ "$prev_hash" == "$content_hash" ]]; then
+    echo "content is identical to v${VERSION}-r${last_rev} (same Dockerfile hash) — nothing to release" >&2
+    exit 1
+  fi
+  REV=$((last_rev + 1))
+else
+  REV=1
+fi
+TAG="v${VERSION}-r${REV}"
+
+if git rev-parse "$TAG" >/dev/null 2>&1; then
+  echo "tag $TAG already exists — nothing to release" >&2
   exit 1
 fi
 
 # -- tag + push --------------------------------------------------------------
 
-log "releasing PHP $VERSION on Alpine $alpine_version"
-git tag "v$VERSION"
-log "tagged v$VERSION"
+log "releasing PHP $VERSION (image revision r${REV}) on Alpine $alpine_version"
+git tag -a "$TAG" -m "php=$VERSION
+rev=$REV
+alpine=$alpine_version
+content_hash=$content_hash
+image_sha=$image_sha"
+log "tagged $TAG"
 
 if [[ $PUSH -eq 0 ]]; then
-  log "done (--no-push). run: git push origin v$VERSION"
+  log "done (--no-push). run: git push origin $TAG"
   exit 0
 fi
 
-log "pushing tag v$VERSION"
-git push origin "v$VERSION"
-log "done. CI will build and publish ghcr.io/scalecommerce/docker-php-cli:$VERSION and :$PHP_MAJOR"
+log "pushing tag $TAG"
+git push origin "$TAG"
+log "done. CI will publish:"
+log "  ghcr.io/scalecommerce/docker-php-cli:${VERSION}-r${REV}  (immutable)"
+log "  ghcr.io/scalecommerce/docker-php-cli:${VERSION}          (rolling -> r${REV})"
+log "  ghcr.io/scalecommerce/docker-php-cli:${PHP_MAJOR}            (rolling)"

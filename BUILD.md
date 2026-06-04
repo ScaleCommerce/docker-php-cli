@@ -13,16 +13,20 @@ Builds the image for PHP 8.4 on host arch, pulling whatever patch Alpine current
 ### 2. Release
 
 ```
-./release.sh 8.4.12            # tag v8.4.12 and push — triggers CI
+./release.sh 8.4.12            # tag v8.4.12-rN and push — triggers CI
 ./release.sh 8.4.12 --no-push  # tag but don't push
 ```
 
-`release.sh` checks that `build-local.sh` was run against this exact version (via the `.build-verified-8.4` marker), then tags `v8.4.12` and pushes. The tag push triggers `.github/workflows/release.yml`, which:
+You pass the **PHP version**; `release.sh` computes the image revision `rN` itself — the next free `r` for that PHP version (`r1`, `r2`, …), or it refuses if the content is byte-identical to the last revision (the Dockerfile `content_hash` is stamped into each tag's annotation). It also checks that `build-local.sh` ran against this exact version (via the `.build-verified-8.4` marker), then tags `v8.4.12-rN` and pushes. The tag push triggers `.github/workflows/release.yml`, which:
 
 1. Builds multi-arch (amd64/arm64) with matching Alpine + PHP build args.
-2. Pushes to `ghcr.io/scalecommerce/docker-php-cli:8.4.12` (immutable) and `ghcr.io/scalecommerce/docker-php-cli:8.4` (rolling).
+2. Pushes three tags: `…:8.4.12-rN` (immutable), `…:8.4.12` (rolling → newest revision), and `…:8.4` (rolling → newest patch).
 3. Pulls the published image and verifies it actually contains PHP 8.4.12 — guards against Alpine bumping the patch between your local build and the CI run.
 4. Creates a GitHub Release whose body contains `/opt/versions.txt` and `/opt/extensions.txt`.
+
+### Image revisions (`-rN`)
+
+The version axis is PHP-only, but the image bundles more than PHP (zpinit, Node, pnpm, Composer, the entrypoint). When that tooling changes without a PHP patch bump, `-rN` is where it's recorded: `8.4.12-r1` → `8.4.12-r2`. The `8.4.12` and `8.4` tags roll forward to the newest revision, so casual pulls always get the latest; pin `-rN` for reproducible/rollback-able builds. Old revisions are safe to prune from GHCR whenever — nothing is obligated to keep them.
 
 ### Preconditions for `release.sh`
 

@@ -12,7 +12,10 @@ docker pull ghcr.io/scalecommerce/docker-php-cli:8.4
 
 Tag scheme (no `latest`, by design — pick a PHP major explicitly):
 * `8.4` — rolling, tracks the latest 8.4.x
-* `8.4.12` — immutable, pinned to a specific patch version
+* `8.4.12` — rolling, tracks the latest image build of PHP 8.4.12
+* `8.4.12-r2` — immutable, pinned to an exact PHP patch **and** image revision
+
+The image bundles more than PHP (zpinit, Node, pnpm, Composer, the entrypoint), so its content can change while the PHP patch stays the same. The `-rN` revision distinguishes those builds: `8.4.12` rolls forward to the newest revision, while `8.4.12-r2` is frozen. Pin the `-rN` form for reproducible or rollback-able builds.
 
 Supported PHP majors: **8.2, 8.3, 8.4, 8.5**. See [php.net supported versions](https://www.php.net/supported-versions.php) for current EOL dates.
 
