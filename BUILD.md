@@ -41,6 +41,19 @@ Builds the image for PHP 8.4 on host arch, pulling whatever patch Alpine current
 
 Kept in two places that must stay in sync: `build-local.sh` and `.github/workflows/release.yml`. If Alpine's PHP packaging moves, update both.
 
+## zpinit version
+
+Pinned in **one** place: the `ARG ZPINIT_VERSION` default in `Dockerfile`
+(unlike the Alpine map, it is *not* duplicated in the scripts — both local and
+CI builds inherit the Dockerfile default). The binary is pulled from
+`ghcr.io/0ploy/zpinit:<version>` via a build stage; it's multi-arch, so the
+`COPY --from` resolves amd64/arm64 automatically per build platform.
+
+To bump it, edit the `ARG ZPINIT_VERSION` line. That changes the Dockerfile
+content hash, which invalidates `.build-verified-*`, so `release.sh` will
+refuse to tag until you re-run `build-local.sh`. The installed version is
+recorded in `/opt/versions.txt` (and therefore in each GitHub Release body).
+
 ## Manual multi-arch build (fallback)
 
 Only use this if CI is broken. You'll need a GitHub PAT with `write:packages`:

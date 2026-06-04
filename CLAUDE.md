@@ -25,6 +25,26 @@ Two steps: `./build-local.sh <major>` then `./release.sh <full-version>`. `build
 
 Each release pushes `X.Y.Z` (immutable) + `X.Y` (rolling). **No `latest` tag — deliberate.** Don't add one without discussing it.
 
+## zpinit is the entrypoint (PID 1)
+
+`ENTRYPOINT ["zpinit"]`, **no CMD — intentional.** Bare `docker run` → zpinit
+supervise mode (Mode 3) with an empty `services/`: idle, reaping, control
+socket up. Passing a command → wrap mode (Mode 1): zpinit execs it and exits.
+This is a base image for downstream services, hence:
+
+- Empty `/etc/zpinit/services/` and `/etc/zpinit/entrypoint.d/` are created
+  (via `mkdir` in the RUN block) as scaffolding for downstream `COPY`s. Don't
+  add a `zpinit.toml` or any service file here — keep the base unopinionated.
+- `zpctl` is shipped (not just `zpinit`) so downstream consumers/operators can
+  manage supervised workers (Symfony messenger consumers, etc.).
+- `PATH` / `COMPOSER_ALLOW_SUPERUSER` stay as Dockerfile `ENV`, **not** zpinit
+  `[env]`: a dev image needs them visible inside `docker exec`, which `[env]`
+  (spawn-path only) would hide.
+- Banner is left on (no `ZPINIT_NO_BANNER`) — useful in `docker logs`.
+- `ZPINIT_VERSION` is pinned once in the Dockerfile `ARG` (single source; not
+  duplicated in the scripts like the Alpine map). Bumping it re-hashes the
+  Dockerfile → invalidates `.build-verified-*`. Don't float it to `:latest`.
+
 ## Dockerfile quirks
 
 - Extension list lives in the `EXTENSIONS` variable inside the RUN block. A per-package probe (`apk search -q -x`) silently filters missing packages and logs a `Note:` line. Alpine's PHP packaging isn't uniform across majors — e.g. `php85-opcache` isn't a separate package (opcache is compiled into the `php85` core). If you add an extension and it doesn't end up in the image, check the build log for the skip.

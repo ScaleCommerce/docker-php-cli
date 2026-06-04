@@ -50,6 +50,20 @@ if [[ "$PHP_MAJOR_FROM_BUILD" != "$PHP_MAJOR" ]]; then
   exit 1
 fi
 
+# Smoke-test the zpinit entrypoint: wrap mode (a command runs and exits) and
+# supervise mode (bare run validates an empty config). Both must pass before
+# we write the verified marker.
+log "smoke-testing zpinit entrypoint"
+WRAP_PHP=$(docker run --rm "$IMAGE_LOCAL" php -r 'echo PHP_VERSION;')
+if [[ "$WRAP_PHP" != "$PHP_FULL_VER" ]]; then
+  echo "wrap-mode smoke test failed: 'php -r' returned '$WRAP_PHP', expected '$PHP_FULL_VER'" >&2
+  exit 1
+fi
+if ! docker run --rm "$IMAGE_LOCAL" --check-config /etc/zpinit/ >/dev/null; then
+  echo "supervise-mode smoke test failed: 'zpinit --check-config /etc/zpinit/' did not exit 0" >&2
+  exit 1
+fi
+
 log "built PHP $PHP_FULL_VER"
 log "image versions:"
 printf '%s\n' "$VERSIONS_TXT" | sed 's/^/   /'
