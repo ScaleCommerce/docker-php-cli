@@ -27,6 +27,8 @@ Each release pushes three image tags: `X.Y.Z-rN` (immutable — PHP patch + our 
 
 `-rN` is OUR slot for image changes that don't move the PHP patch (a zpinit bump, an extension tweak): the version axis is PHP-only, but image content is broader, so a bare `X.Y.Z` has nowhere to record "same PHP, new tooling." You still call `./release.sh X.Y.Z`; `release.sh` computes N by scanning existing `vX.Y.Z-r*` git tags and stamps the Dockerfile `content_hash` into each annotated tag, so a byte-identical rebuild is refused (no revision churn). Pre-revision `vX.Y.Z` tags (no suffix) are legacy; ignore them.
 
+**N is scoped per full patch version (`X.Y.Z`), not per major and not global.** Each exact PHP patch has its own independent sequence, and a patch bump resets it: `8.5.6-r1, 8.5.6-r2` then `8.5.7-r1` (fresh — does *not* continue from 8.5.6's last N). So N only climbs when you re-release the *same* PHP patch with changed content; it's "how many times we rebuilt this specific PHP version." Bumping 8.5.6 to `-r2` leaves 8.4.21 at `-r1` until 8.4.21 itself is rebuilt.
+
 ## zpinit is the entrypoint (PID 1)
 
 `ENTRYPOINT ["zpinit"]`, **no CMD — intentional.** Bare `docker run` → zpinit
